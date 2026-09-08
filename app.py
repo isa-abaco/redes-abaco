@@ -66,8 +66,8 @@ try:
     sheetdb_url = st.secrets["SHEETDB_API_URL"]
     
     genai.configure(api_key=api_key)
-    # Atualizado para o modelo Flash atual da API
-    model = genai.GenerativeModel('gemini-3.7-flash')
+    # Utilizando o modelo estável padrão do Google AI Studio
+    model = genai.GenerativeModel('gemini-2.5-flash')
     
     with st.form("form_atividade", clear_on_submit=True):
         unidade = st.selectbox(
@@ -103,7 +103,7 @@ try:
                 else:
                     with st.spinner("Enviando material com segurança para a central de marketing..."):
                         try:
-                            # 1. Análise silenciosa pela IA (sem poluir a tela do professor)
+                            # 1. Análise silenciosa pela IA
                             primeira_imagem = Image.open(uploaded_files[0])
                             
                             prompt = f"""
@@ -139,7 +139,7 @@ try:
                             status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
                             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                             
-                            # 3. Envio direto para a Planilha do Marketing (Visível apenas para a Gestão)
+                            # 3. Envio direto para a Planilha do Marketing via SheetDB
                             dados_para_planilha = {
                                 "data": data_atual,
                                 "unidade": unidade,
@@ -152,7 +152,6 @@ try:
                             
                             requests.post(sheetdb_url, json=dados_para_planilha)
                             
-                            # Mensagem limpa e rápida de sucesso para o professor
                             st.success("✨ Material enviado com sucesso! A equipe de marketing já recebeu os arquivos e a sugestão de legenda na central.")
                             
                         except Exception as e:
