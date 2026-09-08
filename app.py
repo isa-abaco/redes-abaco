@@ -3,10 +3,7 @@ import google.generativeai as genai
 from PIL import Image
 import requests
 from datetime import datetime
-import io
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+import os
 
 # Configuração da página
 st.set_page_config(
@@ -58,52 +55,15 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Função para criar uma pasta específica e subir as fotos lá dentro
-def criar_pasta_e_subir_fotos(uploaded_files, unidade, folder_id, credentials_dict):
-    try:
-        credentials = service_account.Credentials.from_service_account_info(
-            credentials_dict, scopes=['https://www.googleapis.com/auth/drive.file']
-        )
-        service = build('drive', 'v3', credentials=credentials)
-        
-        # 1. Cria o nome da pasta com a unidade e a data/hora atual
-        timestamp = datetime.now().strftime("%d-%m-%Y_%H-%M")
-        nome_pasta_envio = f"{unidade} - {timestamp}"
-        
-        folder_metadata = {
-            'name': nome_pasta_envio,
-            'mimeType': 'application/vnd.google-apps.folder',
-            'parents': [folder_id]
-        }
-        
-        # Cria a pasta no Google Drive
-        pasta_criada = service.files().create(body=folder_metadata, fields='id, webViewLink').execute()
-        nova_pasta_id = pasta_criada.get('id')
-        link_pasta = pasta_criada.get('webViewLink')
-        
-        # 2. Sobe cada arquivo enviado para dentro dessa nova pasta criada
-        for file in uploaded_files:
-            file_metadata = {
-                'name': file.name,
-                'parents': [nova_pasta_id]
-            }
-            media = MediaIoBaseUpload(
-                io.BytesIO(file.getvalue()),
-                mimetype=file.type,
-                resumable=True
-            )
-            service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-            
-        return link_pasta
-    except Exception as e:
-        return f"Erro ao criar pasta: {str(e)}"
+# Cria a pasta interna de armazenamento privado se ela não existir
+PASTA_INTERNA = "fotos_salvas"
+if not os.path.exists(PASTA_INTERNA):
+    os.makedirs(PASTA_INTERNA)
 
-# Configuração automática das Chaves via Secrets
+# Configuração automática das Chaves via Secrets (Apenas Gemini e SheetDB agora!)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     sheetdb_url = st.secrets["SHEETDB_API_URL"]
-    folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"]
-    creds_dict = dict(st.secrets["google_credentials"])
     
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-2.5-flash')
@@ -139,7 +99,7 @@ try:
                 if len(uploaded_files) > 20:
                     st.warning("⚠️ Você enviou mais de 20 fotos. Por favor, selecione no máximo 20 imagens por envio.")
                 else:
-                    with st.spinner(f"Processando {len(uploaded_files)} foto(s), criando pasta exclusiva e analisando com IA..."):
+                    with st.spinner(f"Processando {len(uploaded_files)} foto(s) com segurança e analisando com IA..."):
                         try:
                             # 1. Análise com a primeira imagem
                             primeira_imagem = Image.open(uploaded_files[0])
@@ -164,13 +124,24 @@ try:
                             st.markdown("### 📊 Resultado da Curadoria:")
                             st.write(resposta_ia)
                             
-                            # 2. Cria a pasta exclusiva no Drive e joga as fotos lá dentro
-                            link_da_pasta_criada = criar_pasta_e_subir_fotos(uploaded_files, unidade, folder_id, creds_dict)
+                            # 2. Salva as fotos na pasta privada interna do app
+                            nomes_arquivos_salvos = []
+                            timestamp_lote = datetime.now().strftime("%Y%m%d_%H%M%S")
                             
+                            for idx, file in enumerate(uploaded_files):
+                                nome_seguro = f"{timestamp_lote}_{idx}_{file.name}"
+                                caminho_completo = os.path.join(PASTA_INTERNA, nome_seguro)
+                                
+                                with open(caminho_completo, "wb") as f:
+                                    f.write(file.getbuffer())
+                                
+                                nomes_arquivos_salvos.append(nome_seguro)
+                            
+                            string_nomes = " | ".join(nomes_arquivos_salvos)
                             status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
                             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                             
-                            # 3. Registra os dados e o link da pasta na Planilha do Google
+                            # 3. Registra os dados na Planilha do Google via SheetDB
                             dados_para_planilha = {
                                 "data": data_atual,
                                 "unidade": unidade,
@@ -178,11 +149,11 @@ try:
                                 "status": status_aprovado,
                                 "motivo": "Ver relatório gerado",
                                 "legenda": resposta_ia,
-                                "nome_arquivo_foto": link_da_pasta_criada
+                                "nome_arquivo_foto": f"Armazenado internamente no App: {string_nomes}"
                             }
                             
                             requests.post(sheetdb_url, json=dados_para_planilha)
-                            st.info("📁 Pasta exclusiva criada no Google Drive com as fotos, e link enviado automaticamente para a planilha do marketing!")
+                            st.info("🔒 Fotos armazenadas com segurança no servidor privado do aplicativo e planilha atualizada!")
                             
                         except Exception as e:
                             st.error(f"Ocorreu um erro ao processar: {e}")
@@ -190,4 +161,4 @@ try:
                 st.warning("⚠️ Por favor, envie pelo menos uma foto e preencha o relato pedagógico.")
 
 except Exception as e:
-    st.error("⚠️ Erro de configuração nas Secrets. Verifique as credenciais do Google Drive, Gemini e SheetDB.")
+    st.error("⚠️ Erro de configuração nas Secrets. Verifique se a `GEMINI_API_KEY` e o `SHEETDB_API_URL` estão configurados corretamente.")
