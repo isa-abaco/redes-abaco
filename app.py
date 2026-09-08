@@ -66,8 +66,8 @@ try:
     sheetdb_url = st.secrets["SHEETDB_API_URL"]
     
     genai.configure(api_key=api_key)
-    # Utilizando o modelo estável padrão do Google AI Studio
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    # Atualizado para o modelo atual suportado pela API
+    model = genai.GenerativeModel('gemini-3.7-flash')
     
     with st.form("form_atividade", clear_on_submit=True):
         unidade = st.selectbox(
