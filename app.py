@@ -6,7 +6,6 @@ from datetime import datetime
 import os
 import zipfile
 import io
-import time
 
 # Configuração da página
 st.set_page_config(
@@ -91,6 +90,18 @@ try:
     
     with aba_professor:
         with st.form("form_atividade", clear_on_submit=True):
+            st.subheader("Identificação (Opcional)")
+            col1, col2 = st.columns(2)
+            with col1:
+                nome_professor = st.text_input("Seu Nome:", placeholder="Ex: Profa. Maria")
+            with col2:
+                funcao_professor = st.text_input("Sua Função / Cargo:", placeholder="Ex: Professor(a) de Matemática, Estagiário...")
+            
+            telefone_professor = st.text_input("Telefone / WhatsApp (Opcional):", placeholder="Ex: (11) 99999-9999")
+            
+            st.markdown("---")
+            st.subheader("Dados da Atividade")
+            
             unidade = st.selectbox(
                 "Selecione a Unidade Escolar:",
                 [
@@ -105,7 +116,7 @@ try:
             
             st.info(
                 "💡 **Dica de Envio:** Você pode selecionar até **30 imagens**, mas recomendamos o envio de **no máximo 15 fotos por vez**. "
-                "Lotes muito grandes com fotos pesadas podem demorar para carregar dependendo da sua conexão."
+                "⚠️ **Atenção:** Dependendo do tamanho das fotos e da sua conexão, o upload completo pode levar alguns minutos. **Por favor, aguarde a mensagem de sucesso na tela e não feche a página até finalizar!**"
             )
             
             uploaded_files = st.file_uploader(
@@ -126,12 +137,11 @@ try:
                 if len(uploaded_files) > 30:
                     st.warning("⚠️ O limite máximo é de 30 fotos por envio. Por favor, divida em dois envios.")
                 else:
-                    # Criando a barra de progresso real na tela
                     barra_progresso = st.progress(0)
                     status_texto = st.empty()
                     
                     try:
-                        status_texto.text("📁 Preparando e salvando arquivos...")
+                        status_texto.text("📁 Preparando e salvando arquivos no servidor...")
                         barra_progresso.progress(20)
                         
                         nomes_arquivos_salvos = []
@@ -147,23 +157,21 @@ try:
                             
                             nomes_arquivos_salvos.append(nome_seguro)
                             
-                            # Atualiza a barra de progresso proporcionalmente ao volume de fotos salvas
                             progresso_parcial = 20 + int((idx + 1) / total_arquivos * 40)
                             if progresso_parcial > 60:
                                 progresso_parcial = 60
                             barra_progresso.progress(progresso_parcial)
-                            status_texto.text(f"Salvando imagem {idx + 1} de {total_arquivos}...")
+                            status_texto.text(f"Salvando foto {idx + 1} de {total_arquivos} (Por favor, aguarde)...")
                         
                         status_texto.text("🤖 Analisando com a inteligência artificial...")
                         barra_progresso.progress(75)
                         
-                        # Análise leve com a IA usando a primeira foto
                         primeira_imagem = Image.open(uploaded_files[0])
                         prompt = f"""
                         Você é um assistente pedagógico especialista em marketing digital e curadoria de conteúdo para as redes sociais do Colégio Ábaco.
-                        Analise a foto e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
+                        Analise a foto e o relato pedagógico fornecido para a unidade: {unidade}.
                         
-                        Relato do professor: "{relato}"
+                        Relato: "{relato}"
                         
                         Responda estritamente seguindo esta estrutura em texto claro:
                         
@@ -182,10 +190,18 @@ try:
                         status_texto.text("📊 Registrando na central de marketing...")
                         barra_progresso.progress(90)
                         
-                        # Envio direto para a Planilha do Google via SheetDB
+                        # Tratamento para caso o professor não preencha os opcionais
+                        nome_final = nome_professor if nome_professor.strip() != "" else "Não informado"
+                        funcao_final = funcao_professor if funcao_professor.strip() != "" else "Não informada"
+                        telefone_final = telefone_professor if telefone_professor.strip() != "" else "Não informado"
+                        
+                        # Envio direto para a Planilha do Google via SheetDB (incluindo os novos campos)
                         payload_sheetdb = {
                             "data": {
                                 "data": data_atual,
+                                "nome": nome_final,
+                                "funcao": funcao_final,
+                                "telefone": telefone_final,
                                 "unidade": unidade,
                                 "relato": relato,
                                 "status": status_aprovado,
@@ -197,11 +213,10 @@ try:
                         
                         requests.post(sheetdb_url, json=payload_sheetdb)
                         
-                        # Finaliza a barra em 100%
                         barra_progresso.progress(100)
                         status_texto.empty()
                         
-                        st.success(f"✨ Sucesso! {len(uploaded_files)} foto(s) enviadas e encaminhadas para a equipe de marketing.")
+                        st.success(f"✨ Sucesso! {len(uploaded_files)} foto(s) enviadas e encaminhadas para a equipe de marketing. Muito obrigado!")
                         
                     except Exception as e:
                         barra_progresso.empty()
@@ -244,7 +259,11 @@ try:
                         st.write(f"### Total de envios registrados: {len(dados_planilha)}")
                         
                         for i, linha in enumerate(reversed(dados_planilha)):
-                            with st.expander(f"📌 {linha.get('data')} - {linha.get('unidade')} ({linha.get('status')})"):
+                            # Mostra no expander os novos campos de identificação
+                            titulo_card = f"📌 {linha.get('data')} - {linha.get('unidade')} | Prof: {linha.get('nome', 'N/D')} ({linha.get('funcao', 'N/D')})"
+                            
+                            with st.expander(titulo_card):
+                                st.write(f"**Remetente:** {linha.get('nome', 'Não informado')} | **Função:** {linha.get('funcao', 'Não informada')} | **Contato:** {linha.get('telefone', 'Não informado')}")
                                 st.write(f"**Relato Pedagógico:** {linha.get('relato')}")
                                 st.markdown(f"**Sugestão de Legenda:**\n\n{linha.get('legenda')}")
                                 
