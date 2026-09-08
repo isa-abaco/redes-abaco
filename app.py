@@ -70,7 +70,6 @@ try:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-3.7-flash')
     
-    # Criando Abas: Uma para o Professor enviar, Outra para o Marketing gerenciar
     aba_professor, aba_marketing = st.tabs(["📝 Envio de Atividades", "🔒 Área Restrita (Marketing)"])
     
     with aba_professor:
@@ -105,28 +104,9 @@ try:
                     if len(uploaded_files) > 30:
                         st.warning("⚠️ O limite máximo é de 30 fotos por envio.")
                     else:
-                        with st.spinner("Enviando material com segurança para a central de marketing..."):
+                        with st.spinner("Processando o lote de fotos e analisando com a IA..."):
                             try:
-                                # 1. Análise com a IA
-                                primeira_imagem = Image.open(uploaded_files[0])
-                                
-                                prompt = f"""
-                                Você é um assistente pedagógico especialista em marketing digital e curadoria de conteúdo para as redes sociais do Colégio Ábaco.
-                                Analise a foto enviada e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
-                                
-                                Relato do professor: "{relato}"
-                                
-                                Responda estritamente seguindo esta estrutura em texto claro:
-                                
-                                **STATUS DA FOTO:** [Aprovada OU Rejeitada]
-                                **MOTIVO:** [Explique em uma frase curta o porquê da aprovação ou rejeição técnica]
-                                **LEGENDA SUGERIDA:** [Se aprovada, crie uma legenda cativante e profissional para o Instagram/Facebook do Colégio Ábaco, com emojis e 3 hashtags. Se rejeitada, escreva 'N/A']
-                                """
-                                
-                                response = model.generate_content([primeira_imagem, prompt])
-                                resposta_ia = response.text
-                                
-                                # 2. Salvamento privado das fotos no servidor do app
+                                # 1. Salvamento privado de TODAS as fotos no servidor do app primeiro
                                 nomes_arquivos_salvos = []
                                 timestamp_lote = datetime.now().strftime("%Y%m%d_%H%M%S")
                                 
@@ -139,6 +119,29 @@ try:
                                     
                                     nomes_arquivos_salvos.append(nome_seguro)
                                 
+                                # 2. Preparando um pacote com até 5 imagens representativas para a IA analisar o contexto geral do lote
+                                imagens_para_ia = []
+                                for file in uploaded_files[:5]: # Pega até as 5 primeiras fotos enviadas
+                                    imagens_para_ia.append(Image.open(file))
+                                
+                                prompt = f"""
+                                Você é um assistente pedagógico especialista em marketing digital e curadoria de conteúdo para as redes sociais do Colégio Ábaco.
+                                Analise o conjunto de fotos enviadas (uma amostra representativa do lote total de {len(uploaded_files)} fotos) e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
+                                
+                                Relato do professor: "{relato}"
+                                
+                                Avalie o contexto geral das imagens em relação ao relato. Responda estritamente seguindo esta estrutura em texto claro:
+                                
+                                **STATUS DA FOTO:** [Aprovada OU Rejeitada]
+                                **MOTIVO:** [Explique em uma frase curta o porquê da aprovação ou rejeição geral do lote]
+                                **LEGENDA SUGERIDA:** [Se aprovada, crie uma legenda cativante e profissional para o Instagram/Facebook do Colégio Ábaco, com emojis e 3 hashtags. Se rejeitada, escreva 'N/A']
+                                """
+                                
+                                # Envia o prompt junto com a lista de imagens coletivas para o Gemini
+                                conteudo_gemini = imagens_para_ia + [prompt]
+                                response = model.generate_content(conteudo_gemini)
+                                resposta_ia = response.text
+                                
                                 string_nomes = " | ".join(nomes_arquivos_salvos)
                                 status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
                                 data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -150,7 +153,7 @@ try:
                                         "unidade": unidade,
                                         "relato": relato,
                                         "status": status_aprovado,
-                                        "motivo": "Análise automatizada concluída",
+                                        "motivo": "Análise multiaquivos concluída",
                                         "legenda": resposta_ia,
                                         "nome_arquivo_foto": f"Arquivos salvos: {string_nomes}"
                                     }
@@ -159,7 +162,7 @@ try:
                                 resultado_envio = requests.post(sheetdb_url, json=payload_sheetdb)
                                 
                                 if resultado_envio.status_code == 201 or resultado_envio.status_code == 200:
-                                    st.success("✨ Material enviado com sucesso! A equipe de marketing já recebeu os arquivos e a sugestão de legenda na central.")
+                                    st.success(f"✨ Material enviado com sucesso! {len(uploaded_files)} foto(s) processadas. A equipe de marketing já recebeu os arquivos e a sugestão de legenda na central.")
                                 else:
                                     st.error("Erro ao salvar na planilha central.")
                                 
@@ -173,15 +176,12 @@ try:
         st.write("Digite a senha da gestão para visualizar os envios e baixar os pacotes de fotos.")
         
         senha_digitada = st.text_input("Senha de Acesso:", type="password")
-        
-        # Defina aqui a senha que a equipe de marketing vai usar (ex: abaco2026)
         SENHA_MESTRE = "abaco2026"
         
         if senha_digitada == SENHA_MESTRE:
             st.success("🔓 Acesso liberado!")
             
             try:
-                # Busca os dados direto da planilha do SheetDB
                 response = requests.get(sheetdb_url)
                 if response.status_code == 200:
                     dados_planilha = response.json()
@@ -190,7 +190,6 @@ try:
                         st.markdown("---")
                         st.write(f"### Total de envios registrados: {len(dados_planilha)}")
                         
-                        # Mostra os registros do mais recente para o mais antigo
                         for i, linha in enumerate(reversed(dados_planilha)):
                             with st.expander(f"📌 {linha.get('data')} - {linha.get('unidade')} ({linha.get('status')})"):
                                 st.write(f"**Relato Pedagógico:** {linha.get('relato')}")
@@ -198,13 +197,11 @@ try:
                                 
                                 arquivos_str = linha.get('nome_arquivo_foto', '')
                                 
-                                # Extrai os nomes dos arquivos salvos na string
                                 if "Arquivos salvos:" in arquivos_str:
                                     lista_nomes = arquivos_str.replace("Arquivos salvos: ", "").split(" | ")
                                     
                                     st.write(f"**Fotos no Lote:** {len(lista_nomes)} imagem(ns)")
                                     
-                                    # Cria um arquivo ZIP em memória com as fotos daquele envio para baixar de uma vez só
                                     zip_buffer = io.BytesIO()
                                     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
                                         for nome_arq in lista_nomes:
@@ -232,6 +229,3 @@ try:
                 
         elif senha_digitada != "":
             st.error("❌ Senha incorreta.")
-
-except Exception as e:
-    st.error("⚠️ Erro de configuração nas Secrets. Verifique as chaves do Gemini e do SheetDB.")
