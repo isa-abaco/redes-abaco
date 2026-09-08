@@ -45,6 +45,22 @@ st.markdown("""
         background-color: #0b2545;
         color: white;
     }
+    .whatsapp-btn {
+        display: block;
+        width: 100%;
+        background-color: #25d366;
+        color: white;
+        text-align: center;
+        padding: 10px;
+        border-radius: 8px;
+        font-weight: bold;
+        text-decoration: none;
+        margin-top: 15px;
+    }
+    .whatsapp-btn:hover {
+        background-color: #128c7e;
+        color: white;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -86,8 +102,14 @@ try:
                 ]
             )
             
+            # Aviso explicativo sobre o desempenho e quantidade de fotos
+            st.info(
+                "💡 **Dica de Envio:** Você pode selecionar até **30 imagens**, mas recomendamos o envio de **no máximo 15 fotos por vez**. "
+                "Lotes muito grandes com fotos pesadas podem demorar para carregar dependendo da sua conexão."
+            )
+            
             uploaded_files = st.file_uploader(
-                "Selecione as fotos da atividade (Até 30 imagens):", 
+                "Selecione as fotos da atividade:", 
                 type=["jpg", "jpeg", "png"],
                 accept_multiple_files=True
             )
@@ -102,12 +124,11 @@ try:
             if submitted:
                 if uploaded_files and relato:
                     if len(uploaded_files) > 30:
-                        st.warning("⚠️ O limite máximo é de 30 fotos por envio.")
+                        st.warning("⚠️ O limite máximo é de 30 fotos por envio. Por favor, divida em dois envios.")
                     else:
-                        # Feedback ultra-rápido para o professor não ficar esperando
-                        with st.spinner("📤 Salvando e enviando para a central..."):
+                        with st.spinner("📤 Processando o envio e registrando na central..."):
                             try:
-                                # 1. Salvamento relâmpago das fotos no servidor
+                                # 1. Salvamento otimizado das fotos no servidor
                                 nomes_arquivos_salvos = []
                                 timestamp_lote = datetime.now().strftime("%Y%m%d_%H%M%S")
                                 
@@ -120,7 +141,7 @@ try:
                                     
                                     nomes_arquivos_salvos.append(nome_seguro)
                                 
-                                # 2. Análise leve com a IA usando apenas a primeira foto para gerar a legenda instantaneamente sem gargalo
+                                # 2. Análise leve com a IA usando a primeira foto
                                 primeira_imagem = Image.open(uploaded_files[0])
                                 
                                 prompt = f"""
@@ -143,14 +164,14 @@ try:
                                 status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
                                 data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                                 
-                                # 3. Envio imediato para a Planilha do Google via SheetDB
+                                # 3. Envio direto para a Planilha do Google via SheetDB
                                 payload_sheetdb = {
                                     "data": {
                                         "data": data_atual,
                                         "unidade": unidade,
                                         "relato": relato,
                                         "status": status_aprovado,
-                                        "motivo": "Análise rápida concluída",
+                                        "motivo": "Análise concluída",
                                         "legenda": resposta_ia,
                                         "nome_arquivo_foto": f"Arquivos salvos: {string_nomes}"
                                     }
@@ -164,6 +185,20 @@ try:
                                 st.error(f"Ocorreu um erro ao processar o envio: {e}")
                 else:
                     st.warning("⚠️ Por favor, adicione pelo menos uma foto e preencha o relato pedagógico.")
+
+        # Rodapé com Suporte via WhatsApp para os professores
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style="text-align: center; color: #555; font-size: 14px; margin-top: 10px;">
+                Teve algum problema ou erro no envio?<br>
+                <a href="https://wa.me/5511961789247?text=Olá,%20estou%20com%20uma%20dúvida%20ou%20erro%20no%20Portal%20de%20Envio%20Pedagógico%20do%20Ábaco." target="_blank" class="whatsapp-btn">
+                    💬 Suporte Técnico via WhatsApp
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     with aba_marketing:
         st.subheader("Painel de Controle - Equipe de Marketing")
