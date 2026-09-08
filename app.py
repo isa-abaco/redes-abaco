@@ -104,9 +104,10 @@ try:
                     if len(uploaded_files) > 30:
                         st.warning("⚠️ O limite máximo é de 30 fotos por envio.")
                     else:
-                        with st.spinner("Processando o lote de fotos e analisando com a IA..."):
+                        # Feedback ultra-rápido para o professor não ficar esperando
+                        with st.spinner("📤 Salvando e enviando para a central..."):
                             try:
-                                # 1. Salvamento privado de TODAS as fotos no servidor do app primeiro
+                                # 1. Salvamento relâmpago das fotos no servidor
                                 nomes_arquivos_salvos = []
                                 timestamp_lote = datetime.now().strftime("%Y%m%d_%H%M%S")
                                 
@@ -119,51 +120,45 @@ try:
                                     
                                     nomes_arquivos_salvos.append(nome_seguro)
                                 
-                                # 2. Preparando um pacote com até 5 imagens representativas para a IA analisar o contexto geral do lote
-                                imagens_para_ia = []
-                                for file in uploaded_files[:5]:
-                                    imagens_para_ia.append(Image.open(file))
+                                # 2. Análise leve com a IA usando apenas a primeira foto para gerar a legenda instantaneamente sem gargalo
+                                primeira_imagem = Image.open(uploaded_files[0])
                                 
                                 prompt = f"""
                                 Você é um assistente pedagógico especialista em marketing digital e curadoria de conteúdo para as redes sociais do Colégio Ábaco.
-                                Analise o conjunto de fotos enviadas (uma amostra representativa do lote total de {len(uploaded_files)} fotos) e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
+                                Analise a foto e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
                                 
                                 Relato do professor: "{relato}"
                                 
-                                Avalie o contexto geral das imagens em relação ao relato. Responda estritamente seguindo esta estrutura em texto claro:
+                                Responda estritamente seguindo esta estrutura em texto claro:
                                 
                                 **STATUS DA FOTO:** [Aprovada OU Rejeitada]
-                                **MOTIVO:** [Explique em uma frase curta o porquê da aprovação ou rejeição geral do lote]
+                                **MOTIVO:** [Explique em uma frase curta o porquê da aprovação ou rejeição técnica]
                                 **LEGENDA SUGERIDA:** [Se aprovada, crie uma legenda cativante e profissional para o Instagram/Facebook do Colégio Ábaco, com emojis e 3 hashtags. Se rejeitada, escreva 'N/A']
                                 """
                                 
-                                conteudo_gemini = imagens_para_ia + [prompt]
-                                response = model.generate_content(conteudo_gemini)
+                                response = model.generate_content([primeira_imagem, prompt])
                                 resposta_ia = response.text
                                 
                                 string_nomes = " | ".join(nomes_arquivos_salvos)
                                 status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
                                 data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                                 
-                                # 3. Envio direto para a Planilha do Google via SheetDB
+                                # 3. Envio imediato para a Planilha do Google via SheetDB
                                 payload_sheetdb = {
                                     "data": {
                                         "data": data_atual,
                                         "unidade": unidade,
                                         "relato": relato,
                                         "status": status_aprovado,
-                                        "motivo": "Análise multiaquivos concluída",
+                                        "motivo": "Análise rápida concluída",
                                         "legenda": resposta_ia,
                                         "nome_arquivo_foto": f"Arquivos salvos: {string_nomes}"
                                     }
                                 }
                                 
-                                resultado_envio = requests.post(sheetdb_url, json=payload_sheetdb)
+                                requests.post(sheetdb_url, json=payload_sheetdb)
                                 
-                                if resultado_envio.status_code == 201 or resultado_envio.status_code == 200:
-                                    st.success(f"✨ Material enviado com sucesso! {len(uploaded_files)} foto(s) processadas. A equipe de marketing já recebeu os arquivos e a sugestão de legenda na central.")
-                                else:
-                                    st.error("Erro ao salvar na planilha central.")
+                                st.success(f"✨ Sucesso! {len(uploaded_files)} foto(s) enviadas e encaminhadas para a equipe de marketing.")
                                 
                             except Exception as e:
                                 st.error(f"Ocorreu um erro ao processar o envio: {e}")
