@@ -121,7 +121,7 @@ try:
                                 
                                 # 2. Preparando um pacote com até 5 imagens representativas para a IA analisar o contexto geral do lote
                                 imagens_para_ia = []
-                                for file in uploaded_files[:5]: # Pega até as 5 primeiras fotos enviadas
+                                for file in uploaded_files[:5]:
                                     imagens_para_ia.append(Image.open(file))
                                 
                                 prompt = f"""
@@ -137,7 +137,6 @@ try:
                                 **LEGENDA SUGERIDA:** [Se aprovada, crie uma legenda cativante e profissional para o Instagram/Facebook do Colégio Ábaco, com emojis e 3 hashtags. Se rejeitada, escreva 'N/A']
                                 """
                                 
-                                # Envia o prompt junto com a lista de imagens coletivas para o Gemini
                                 conteudo_gemini = imagens_para_ia + [prompt]
                                 response = model.generate_content(conteudo_gemini)
                                 resposta_ia = response.text
@@ -229,3 +228,6 @@ try:
                 
         elif senha_digitada != "":
             st.error("❌ Senha incorreta.")
+
+except Exception as e:
+    st.error(f"⚠️ Erro de configuração nas Secrets ou no sistema: {e}")
