@@ -66,7 +66,6 @@ try:
     sheetdb_url = st.secrets["SHEETDB_API_URL"]
     
     genai.configure(api_key=api_key)
-    # Atualizado para o modelo atual suportado pela API
     model = genai.GenerativeModel('gemini-3.7-flash')
     
     with st.form("form_atividade", clear_on_submit=True):
@@ -82,7 +81,6 @@ try:
             ]
         )
         
-        # Permitindo até 30 fotos
         uploaded_files = st.file_uploader(
             "Selecione as fotos da atividade (Até 30 imagens):", 
             type=["jpg", "jpeg", "png"],
@@ -103,7 +101,7 @@ try:
                 else:
                     with st.spinner("Enviando material com segurança para a central de marketing..."):
                         try:
-                            # 1. Análise silenciosa pela IA
+                            # 1. Análise com a IA
                             primeira_imagem = Image.open(uploaded_files[0])
                             
                             prompt = f"""
@@ -139,20 +137,26 @@ try:
                             status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
                             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                             
-                            # 3. Envio direto para a Planilha do Marketing via SheetDB
-                            dados_para_planilha = {
-                                "data": data_atual,
-                                "unidade": unidade,
-                                "relato": relato,
-                                "status": status_aprovado,
-                                "motivo": "Análise automatizada concluída",
-                                "legenda": resposta_ia,
-                                "nome_arquivo_foto": f"Arquivos salvos: {string_nomes}"
+                            # 3. Estrutura correta exigida pelo SheetDB (envolvido em "data")
+                            payload_sheetdb = {
+                                "data": {
+                                    "data": data_atual,
+                                    "unidade": unidade,
+                                    "relato": relato,
+                                    "status": status_aprovado,
+                                    "motivo": "Análise automatizada concluída",
+                                    "legenda": resposta_ia,
+                                    "nome_arquivo_foto": f"Arquivos salvos: {string_nomes}"
+                                }
                             }
                             
-                            requests.post(sheetdb_url, json=dados_para_planilha)
+                            # Envia os dados para a API do SheetDB
+                            resultado_envio = requests.post(sheetdb_url, json=payload_sheetdb)
                             
-                            st.success("✨ Material enviado com sucesso! A equipe de marketing já recebeu os arquivos e a sugestão de legenda na central.")
+                            if resultado_envio.status_code == 201 or resultado_envio.status_code == 200:
+                                st.success("✨ Material enviado com sucesso! A equipe de marketing já recebeu os arquivos e a sugestão de legenda na central.")
+                            else:
+                                st.error(f"Erro ao salvar na planilha (Código {resultado_envio.status_code}): {resultado_envio.text}")
                             
                         except Exception as e:
                             st.error(f"Ocorreu um erro ao processar o envio: {e}")
