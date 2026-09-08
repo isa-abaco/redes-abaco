@@ -12,12 +12,9 @@ st.set_page_config(
 # Estilização visual com a identidade do Colégio Ábaco (Azul Escuro e Azul Claro)
 st.markdown("""
     <style>
-    /* Fundo geral sutil */
     .main {
         background-color: #f4f7f6;
     }
-    
-    /* Cabeçalho personalizado do Ábaco */
     .abaco-header {
         background: linear-gradient(135deg, #0b2545 0%, #134074 100%);
         padding: 25px;
@@ -27,15 +24,11 @@ st.markdown("""
         margin-bottom: 25px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    
-    /* Força o logo azul original a ficar totalmente BRANCO no fundo escuro */
     .abaco-logo {
         width: 180px;
         margin-bottom: 15px;
         filter: brightness(0) invert(1);
     }
-
-    /* Estilo dos botões */
     .stButton>button {
         width: 100%;
         background-color: #134074;
@@ -61,15 +54,12 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Configuração da Chave da API do Gemini
-api_key = st.text_input("Insira sua chave da API do Google Gemini (AI Studio):", type="password")
-
-if api_key:
+# Configuração automática da Chave da API via Secrets do Streamlit
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-2.5-flash')
-
-    st.markdown("---")
-
+    
     # Formulário de Envio
     with st.form("form_atividade"):
         unidade = st.selectbox(
@@ -118,5 +108,6 @@ if api_key:
                         st.error(f"Ocorreu um erro ao processar com a IA: {e}")
             else:
                 st.warning("⚠️ Por favor, envie uma foto e preencha o relato pedagógico antes de enviar.")
-else:
-    st.info("💡 Para iniciar os testes, insira sua chave gratuita da API do Gemini acima (disponível no [Google AI Studio](https://aistudio.google.com/)).")
+
+except Exception as e:
+    st.error("⚠️ Configuração de chave de API não encontrada. Por favor, adicione a `GEMINI_API_KEY` nas configurações (Secrets) do seu app no Streamlit Cloud.")
