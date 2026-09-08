@@ -64,7 +64,14 @@ try:
     with st.form("form_atividade"):
         unidade = st.selectbox(
             "Selecione a Unidade Escolar:",
-            ["Unidade I - SBC (Educação Infantil / Fundamental I)", "Unidade II - SBC (Fundamental II / Médio)", "Unidade São Paulo / Ipiranga", "Unidade São Paulo / Sumaré"]
+            [
+                "Unidade I - SBC (Educação Infantil / Fundamental I)", 
+                "Unidade II - SBC (Fundamental II / Médio)", 
+                "Unidade São Paulo / Ipiranga", 
+                "Unidade São Paulo / Sumaré",
+                "Unidade Mogi das Cruzes",
+                "Unidade São Carlos"
+            ]
         )
         
         uploaded_file = st.file_uploader(
@@ -74,7 +81,7 @@ try:
         
         relato = st.text_area(
             "Relato Pedagógico da Atividade:",
-            placeholder="Ex: Os alunos do Fundamental participaram de um projeto no laboratório, desenvolvendo..."
+            placeholder="Ex: Os alunos participaram de um projeto no laboratório, desenvolvendo..."
         )
         
         submitted = st.form_submit_button("🚀 Enviar para Análise da IA")
@@ -87,7 +94,7 @@ try:
                         
                         prompt = f"""
                         Você é um assistente pedagógico especialista em marketing digital e curadoria de conteúdo para as redes sociais do Colégio Ábaco.
-                        Analise a foto enviada e o relato pedagógico fornecido pelo professor.
+                        Analise a foto enviada e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
                         
                         Relato do professor: "{relato}"
                         
