@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 import zipfile
 import io
+import time
 
 # Configuração da página
 st.set_page_config(
@@ -102,7 +103,6 @@ try:
                 ]
             )
             
-            # Aviso explicativo sobre o desempenho e quantidade de fotos
             st.info(
                 "💡 **Dica de Envio:** Você pode selecionar até **30 imagens**, mas recomendamos o envio de **no máximo 15 fotos por vez**. "
                 "Lotes muito grandes com fotos pesadas podem demorar para carregar dependendo da sua conexão."
@@ -121,70 +121,94 @@ try:
             
             submitted = st.form_submit_button("🚀 Enviar Material para a Central")
 
-            if submitted:
-                if uploaded_files and relato:
-                    if len(uploaded_files) > 30:
-                        st.warning("⚠️ O limite máximo é de 30 fotos por envio. Por favor, divida em dois envios.")
-                    else:
-                        with st.spinner("📤 Processando o envio e registrando na central..."):
-                            try:
-                                # 1. Salvamento otimizado das fotos no servidor
-                                nomes_arquivos_salvos = []
-                                timestamp_lote = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                
-                                for idx, file in enumerate(uploaded_files):
-                                    nome_seguro = f"{timestamp_lote}_{idx}_{file.name}"
-                                    caminho_completo = os.path.join(PASTA_INTERNA, nome_seguro)
-                                    
-                                    with open(caminho_completo, "wb") as f:
-                                        f.write(file.getbuffer())
-                                    
-                                    nomes_arquivos_salvos.append(nome_seguro)
-                                
-                                # 2. Análise leve com a IA usando a primeira foto
-                                primeira_imagem = Image.open(uploaded_files[0])
-                                
-                                prompt = f"""
-                                Você é um assistente pedagógico especialista em marketing digital e curadoria de conteúdo para as redes sociais do Colégio Ábaco.
-                                Analise a foto e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
-                                
-                                Relato do professor: "{relato}"
-                                
-                                Responda estritamente seguindo esta estrutura em texto claro:
-                                
-                                **STATUS DA FOTO:** [Aprovada OU Rejeitada]
-                                **MOTIVO:** [Explique em uma frase curta o porquê da aprovação ou rejeição técnica]
-                                **LEGENDA SUGERIDA:** [Se aprovada, crie uma legenda cativante e profissional para o Instagram/Facebook do Colégio Ábaco, com emojis e 3 hashtags. Se rejeitada, escreva 'N/A']
-                                """
-                                
-                                response = model.generate_content([primeira_imagem, prompt])
-                                resposta_ia = response.text
-                                
-                                string_nomes = " | ".join(nomes_arquivos_salvos)
-                                status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
-                                data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-                                
-                                # 3. Envio direto para a Planilha do Google via SheetDB
-                                payload_sheetdb = {
-                                    "data": {
-                                        "data": data_atual,
-                                        "unidade": unidade,
-                                        "relato": relato,
-                                        "status": status_aprovado,
-                                        "motivo": "Análise concluída",
-                                        "legenda": resposta_ia,
-                                        "nome_arquivo_foto": f"Arquivos salvos: {string_nomes}"
-                                    }
-                                }
-                                
-                                requests.post(sheetdb_url, json=payload_sheetdb)
-                                
-                                st.success(f"✨ Sucesso! {len(uploaded_files)} foto(s) enviadas e encaminhadas para a equipe de marketing.")
-                                
-                            except Exception as e:
-                                st.error(f"Ocorreu um erro ao processar o envio: {e}")
+        if submitted:
+            if uploaded_files and relato:
+                if len(uploaded_files) > 30:
+                    st.warning("⚠️ O limite máximo é de 30 fotos por envio. Por favor, divida em dois envios.")
                 else:
-                    st.warning("⚠️ Por favor, adicione pelo menos uma foto e preencha o relato pedagógico.")
+                    # Criando a barra de progresso real na tela
+                    barra_progresso = st.progress(0)
+                    status_texto = st.empty()
+                    
+                    try:
+                        status_texto.text("📁 Preparando e salvando arquivos...")
+                        barra_progresso.progress(20)
+                        
+                        nomes_arquivos_salvos = []
+                        timestamp_lote = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        
+                        total_arquivos = len(uploaded_files)
+                        for idx, file in enumerate(uploaded_files):
+                            nome_seguro = f"{timestamp_lote}_{idx}_{file.name}"
+                            caminho_completo = os.path.join(PASTA_INTERNA, nome_seguro)
+                            
+                            with open(caminho_completo, "wb") as f:
+                                f.write(file.getbuffer())
+                            
+                            nomes_arquivos_salvos.append(nome_seguro)
+                            
+                            # Atualiza a barra de progresso proporcionalmente ao volume de fotos salvas
+                            progresso_parcial = 20 + int((idx + 1) / total_arquivos * 40)
+                            if progresso_parcial > 60:
+                                progresso_parcial = 60
+                            barra_progresso.progress(progresso_parcial)
+                            status_texto.text(f"Salvando imagem {idx + 1} de {total_arquivos}...")
+                        
+                        status_texto.text("🤖 Analisando com a inteligência artificial...")
+                        barra_progresso.progress(75)
+                        
+                        # Análise leve com a IA usando a primeira foto
+                        primeira_imagem = Image.open(uploaded_files[0])
+                        prompt = f"""
+                        Você é um assistente pedagógico especialista em marketing digital e curadoria de conteúdo para as redes sociais do Colégio Ábaco.
+                        Analise a foto e o relato pedagógico fornecido pelo professor para a unidade: {unidade}.
+                        
+                        Relato do professor: "{relato}"
+                        
+                        Responda estritamente seguindo esta estrutura em texto claro:
+                        
+                        **STATUS DA FOTO:** [Aprovada OU Rejeitada]
+                        **MOTIVO:** [Explique em uma frase curta o porquê da aprovação ou rejeição técnica]
+                        **LEGENDA SUGERIDA:** [Se aprovada, crie uma legenda cativante e profissional para o Instagram/Facebook do Colégio Ábaco, com emojis e 3 hashtags. Se rejeitada, escreva 'N/A']
+                        """
+                        
+                        response = model.generate_content([primeira_imagem, prompt])
+                        resposta_ia = response.text
+                        
+                        string_nomes = " | ".join(nomes_arquivos_salvos)
+                        status_aprovado = "Aprovada" if "Aprovada" in resposta_ia else "Rejeitada"
+                        data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        
+                        status_texto.text("📊 Registrando na central de marketing...")
+                        barra_progresso.progress(90)
+                        
+                        # Envio direto para a Planilha do Google via SheetDB
+                        payload_sheetdb = {
+                            "data": {
+                                "data": data_atual,
+                                "unidade": unidade,
+                                "relato": relato,
+                                "status": status_aprovado,
+                                "motivo": "Análise concluída",
+                                "legenda": resposta_ia,
+                                "nome_arquivo_foto": f"Arquivos salvos: {string_nomes}"
+                            }
+                        }
+                        
+                        requests.post(sheetdb_url, json=payload_sheetdb)
+                        
+                        # Finaliza a barra em 100%
+                        barra_progresso.progress(100)
+                        status_texto.empty()
+                        
+                        st.success(f"✨ Sucesso! {len(uploaded_files)} foto(s) enviadas e encaminhadas para a equipe de marketing.")
+                        
+                    except Exception as e:
+                        barra_progresso.empty()
+                        status_texto.empty()
+                        st.error(f"Ocorreu um erro ao processar o envio: {e}")
+            else:
+                st.warning("⚠️ Por favor, adicione pelo menos uma foto e preencha o relato pedagógico.")
 
         # Rodapé com Suporte via WhatsApp para os professores
         st.markdown("---")
